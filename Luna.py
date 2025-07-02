@@ -6,6 +6,12 @@ import pvporcupine
 import pyaudio
 import struct
 import config
+from transformers import SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
+from datasets import load_dataset
+import torch
+import soundfile as sf
+
+print("huzzz")
 
 wake_word_detector = pvporcupine.create(
     access_key = config.wake_word_access_key,
@@ -22,13 +28,27 @@ stream = pa.open(
     frames_per_buffer = wake_word_detector.frame_length
 )
 
+
+print("huzzzjhjhjhbjhbjhbjhbj")
+
+
+# Load the processor, model, and vocoder
+processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
+model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
+vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
+
+embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
+speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0) # type: ignore
+
+print("huzzz")
+
 # Transcribe audio file using the Turbo model
-model = whisper.load_model("tiny")
+whisper_model = whisper.load_model("tiny")
 
 # Record audio from the microphone
 r = sr.Recognizer()
 
-def listen_for_wake_word():
+def get_voice_input(): # get_user_input()
     while True:
         pcm = stream.read(wake_word_detector.frame_length, exception_on_overflow = False)
         pcm = struct.unpack_from("h" * wake_word_detector.frame_length, pcm)
@@ -45,11 +65,33 @@ def listen_for_wake_word():
                 audio_np = np.frombuffer(data, dtype = np.int16).astype(np.float32) / 32768.0
 
                 # Transcribe
-                result = model.transcribe(audio_np, fp16 = False)
+                result = whisper_model.transcribe(audio_np, fp16 = False)
                 print(f"Transcript: {result['text']}")
             break
+    return result
 
-listen_for_wake_word()
+
+def text_to_speech(text, output_wav = "speech_outputs/speech.wav"):
+    # Preprocess the text
+    inputs = processor(text = text, return_tensors = "pt") # type: ignore
+    # Generate speech
+    speech = model.generate_speech(
+        inputs["input_ids"], # type: ignore
+        speaker_embeddings, # type: ignore
+        vocoder = vocoder
+    )
+    # Save to file
+    sf.write(output_wav, speech.numpy(), samplerate=16000) # type: ignore
+    print(f"Speech synthesized and saved to {output_wav}")
+
+    return output_wav
+
+
+
+text_input = get_voice_input()
+text_to_speech(text_input["text"])
+
+
 
 stream.close()
 pa.terminate()
