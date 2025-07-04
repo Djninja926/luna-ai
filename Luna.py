@@ -1,4 +1,4 @@
-# pip install speechrecognition openai-whisper pyaudio pvporcupine
+# pip install speechrecognition openai-whisper pyaudio pvporcupine torch soundfile sentencepeice transformers datasets[audio]
 import whisper
 import numpy as np
 import speech_recognition as sr
@@ -17,6 +17,7 @@ wake_word_detector = pvporcupine.create(
     access_key = config.wake_word_access_key,
     keyword_paths = ["keywords/Hey-Luna_en_windows_v3_0_0.ppn"] # Change the File Name
 )
+
 
 pa = pyaudio.PyAudio()
 
@@ -75,10 +76,10 @@ def text_to_speech(text, output_wav = "speech_outputs/speech.wav"):
     # Preprocess the text
     inputs = processor(text = text, return_tensors = "pt") # type: ignore
     # Generate speech
-    speech = model.generate_speech(
+    speech = model.generate_speech( # type: ignore
         inputs["input_ids"], # type: ignore
         speaker_embeddings, # type: ignore
-        vocoder = vocoder
+        vocoder = vocoder # type: ignore
     )
     # Save to file
     sf.write(output_wav, speech.numpy(), samplerate=16000) # type: ignore
