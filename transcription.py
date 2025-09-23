@@ -5,6 +5,7 @@ import pvporcupine
 import pyaudio
 import struct
 import config
+from transformers import AutoProcessor, DiaForConditionalGeneration
 
 wake_word_detector = pvporcupine.create(
     access_key = config.wake_word_access_key,

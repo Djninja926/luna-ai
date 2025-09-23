@@ -1,9 +1,11 @@
 import config
 import uuid
 import hashlib
+import torch
 from datetime import datetime
 from typing import Dict, Any, List
 from pinecone import Pinecone, ServerlessSpec
+from transformers import AutoProcessor, DiaForConditionalGeneration
 from langchain_core.documents import Document
 from langchain_pinecone import PineconeVectorStore
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -175,7 +177,6 @@ class EnhancedChatMessageHistory(BaseChatMessageHistory): # Extends the built in
 
     # Add a user message to the history
     def add_user_message(self, message: str) -> None:
-        
         self.in_memory_history.add_user_message(message)
         self._last_human_message = message
     
@@ -220,8 +221,6 @@ class EnhancedChatMessageHistory(BaseChatMessageHistory): # Extends the built in
 
 
 
-
-
 # Initialize the chat model
 llm = ChatOllama(model="gemma3:latest")
 
@@ -255,7 +254,7 @@ conversation = RunnableWithMessageHistory(
 )
 
 # Enhanced chat function with optional context retrieval from Pinecone
-def chat_with_luna(message: str, session_id: str = "testing", use_context: bool = True): # Using "testing" as session_id for now
+def chat_with_luna(message: str, session_id: str = "testing", use_context: bool = True):    # Using "testing" as session_id for now
 
     context = ""
     
@@ -278,7 +277,34 @@ def chat_with_luna(message: str, session_id: str = "testing", use_context: bool 
         },
         config={"configurable": {"session_id": session_id}}
     )
-    
+
+    # Generate audio from the response
+    torch_device = "cpu"
+    model_checkpoint = "nari-labs/Dia-1.6B-0626"
+
+    processor = AutoProcessor.from_pretrained(model_checkpoint)
+    inputs = processor(text= "(Serious, Irish)" + response.content, padding=True, return_tensors="pt").to(torch_device)
+
+    model = DiaForConditionalGeneration.from_pretrained(model_checkpoint).to(torch_device)
+    outputs = model.generate(**inputs, max_new_tokens=1024)
+
+    audio = processor.batch_decode(outputs)
+    # processor.play_audio(audio)
+    processor.save_audio(audio, "response1.wav");
+
+
+
+    # processor = AutoProcessor.from_pretrained("facebook/nllb-200-3.3b")
+    # model = DiaForConditionalGeneration.from_pretrained("facebook/nllb-200-3.3b")
+    # inputs = processor(text=response.content, return_tensors="pt")
+    # outputs = model.generate(**inputs)
+    # audio = outputs.cpu().numpy()[0]
+    # return audio
+
+    # # Save the audio to a file
+    # with open("response.wav", "wb") as f:
+    #     f.write(audio)
+
     return response.content
 
 
@@ -301,18 +327,18 @@ def test_usage():
     print("-" * 50)
 
     # Chat with context disabled
-    response2 = chat_with_luna("Tell me a bit about new machine learning advancements", use_context=False)
-    print("Luna:", response2)
-    print("-" * 50)
+    # response2 = chat_with_luna("Tell me a bit about new machine learning advancements", use_context=False)
+    # print("Luna:", response2)
+    # print("-" * 50)
 
-    # Regular chat
-    response3 = chat_with_luna("What's my name?")
-    print("Luna:", response3)
+    # # Regular chat
+    # response3 = chat_with_luna("What's my name?")
+    # print("Luna:", response3)
 
-    # Regular chat
-    response4 = chat_with_luna("What was the topic of conversation about 5 minutes ago?")
-    print("Luna:", response4)
-    print("-" * 50)
+    # # Regular chat
+    # response4 = chat_with_luna("What was the topic of conversation about 5 minutes ago?")
+    # print("Luna:", response4)
+    # print("-" * 50)
 
     # Search past conversations
     past_convos = search_past_conversations("machine learning", limit=3)
